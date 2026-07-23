@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+.env
+data/*.pdf
+data/faiss_index.bin
+data/chunks_cache.pkl
+data/linked_pdfs/
+data/_uploaded_*
+data/tender_extracted_data.xlsx

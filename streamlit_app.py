@@ -19,6 +19,7 @@ from fetch_linked_pdfs import fetch_all_linked_pdfs
 st.set_page_config(page_title="Tender PDF Extractor", layout="wide")
 
 REQUIRED_FIELDS = {"emd_amount", "bid_validity_days", "tender_value", "pbg_percentage", "sd_percentage"}
+SAMPLE_PDFS_DIR = os.path.join(os.path.dirname(__file__), "sample_pdfs")
 
 
 def humanize(key):
@@ -115,15 +116,48 @@ def render_pdf_preview(pdf_path):
 
 st.title("📄 Tender PDF → Structured Data Extractor")
 
-uploaded_file = st.file_uploader("PDF (Tender) Upload", type=["pdf"])
+input_mode = st.radio(
+    "Choose input:",
+    ["Upload your own PDF", "Try a sample tender"],
+    horizontal=True,
+)
+
+uploaded_file = None
+sample_selected_path = None
+
+if input_mode == "Upload your own PDF":
+    uploaded_file = st.file_uploader("PDF (Tender) Upload", type=["pdf"])
+    st.caption("💡 You can drag and drop a PDF directly onto the box above, or click to browse.")
+else:
+    if os.path.isdir(SAMPLE_PDFS_DIR):
+        sample_files = sorted([f for f in os.listdir(SAMPLE_PDFS_DIR) if f.lower().endswith(".pdf")])
+    else:
+        sample_files = []
+
+    if sample_files:
+        chosen_sample = st.selectbox("Pick a sample tender document:", sample_files)
+        sample_selected_path = os.path.join(SAMPLE_PDFS_DIR, chosen_sample)
+    else:
+        st.warning("No sample PDFs found in the sample_pdfs/ folder.")
+
+active_pdf_bytes = None
+active_filename = None
 
 if uploaded_file is not None:
-    file_key = uploaded_file.name
+    active_pdf_bytes = uploaded_file.getvalue()
+    active_filename = uploaded_file.name
+elif sample_selected_path:
+    with open(sample_selected_path, "rb") as f:
+        active_pdf_bytes = f.read()
+    active_filename = os.path.basename(sample_selected_path)
+
+if active_pdf_bytes is not None:
+    file_key = active_filename
 
     if st.session_state.get("processed_filename") != file_key:
         with st.spinner("Processing PDF..."):
             data, tmp_path, linked_paths, linked_summaries, usage_stats, index, chunks, bm25 = process_pdf(
-                uploaded_file.getvalue(), file_key
+                active_pdf_bytes, file_key
             )
         st.session_state["extracted_data"] = data
         st.session_state["pdf_path"] = tmp_path
@@ -159,7 +193,6 @@ if uploaded_file is not None:
         else:
             st.caption("💡 Groq free tier (llama-3.3-70b-versatile): ~12,000 tokens/min, 30 requests/min, "
                        "1000 requests/day (approximate — check console.groq.com for your exact limits).")
-
 
     st.subheader("🔍 Ask a specific question")
     st.caption("If you need information not covered in the fields below, ask here.")
@@ -255,4 +288,4 @@ if uploaded_file is not None:
                         )
 
 else:
-    st.info("Upload a PDF to get started.")
+    st.info("Upload a PDF or choose a sample to get started.")

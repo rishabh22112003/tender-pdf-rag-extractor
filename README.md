@@ -4,7 +4,7 @@ A production-style **Retrieval-Augmented Generation (RAG)** system that reads lo
 
 Built to solve a real problem: manually reading lengthy tender documents to pull out 30+ business-critical fields is slow and error-prone. This tool automates it end-to-end while staying cost-efficient and transparent about API usage.
 
-🔗 **Live demo:** _add your Streamlit Cloud link here_
+🔗 **Live demo:** https://tender-pdf-extractor.streamlit.app/
 
 ---
 

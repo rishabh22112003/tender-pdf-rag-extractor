@@ -3,7 +3,8 @@ STREAMLIT UI: PDF upload -> auto-extract tender fields -> editable form + PDF pr
 Run: streamlit run streamlit_app.py
 """
 import streamlit as st
-import sys, os, base64, json, time
+import sys, os, json, time
+import fitz  # PyMuPDF
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -105,40 +106,47 @@ def process_pdf(pdf_bytes, filename):
 
 
 def render_pdf_preview(pdf_path):
-    with open(pdf_path, "rb") as f:
-        base64_pdf = base64.b64encode(f.read()).decode("utf-8")
-    st.markdown(
-        f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" '
-        f'style="border:1px solid #ddd; border-radius:8px;"></iframe>',
-        unsafe_allow_html=True
+    """PyMuPDF se page-by-page image render karta hai — iframe/data-URI browser blocking se bachne ke liye"""
+    doc = fitz.open(pdf_path)
+    total_pages = len(doc)
+
+    page_num = st.number_input(
+        f"Page (1 to {total_pages})",
+        min_value=1, max_value=total_pages, value=1, step=1,
+        key=f"preview_page_{os.path.basename(pdf_path)}"
     )
+
+    page = doc.load_page(page_num - 1)
+    pix = page.get_pixmap(dpi=120)
+    img_bytes = pix.tobytes("png")
+
+    st.image(img_bytes, use_container_width=True)
+    doc.close()
 
 
 st.title("📄 Tender PDF → Structured Data Extractor")
 
-input_mode = st.radio(
-    "Choose input:",
-    ["Upload your own PDF", "Try a sample tender"],
-    horizontal=True,
-)
-
-uploaded_file = None
-sample_selected_path = None
-
-if input_mode == "Upload your own PDF":
-    uploaded_file = st.file_uploader("PDF (Tender) Upload", type=["pdf"])
-    st.caption("💡 You can drag and drop a PDF directly onto the box above, or click to browse.")
+if os.path.isdir(SAMPLE_PDFS_DIR):
+    sample_files = sorted([f for f in os.listdir(SAMPLE_PDFS_DIR) if f.lower().endswith(".pdf")])
 else:
-    if os.path.isdir(SAMPLE_PDFS_DIR):
-        sample_files = sorted([f for f in os.listdir(SAMPLE_PDFS_DIR) if f.lower().endswith(".pdf")])
-    else:
-        sample_files = []
+    sample_files = []
 
-    if sample_files:
-        chosen_sample = st.selectbox("Pick a sample tender document:", sample_files)
-        sample_selected_path = os.path.join(SAMPLE_PDFS_DIR, chosen_sample)
-    else:
-        st.warning("No sample PDFs found in the sample_pdfs/ folder.")
+if sample_files:
+    with st.expander("📥 Don't have a tender PDF handy? Download a sample to try", expanded=False):
+        st.caption("Download one of these, then upload it below to see the extraction in action.")
+        for fname in sample_files:
+            fpath = os.path.join(SAMPLE_PDFS_DIR, fname)
+            with open(fpath, "rb") as f:
+                st.download_button(
+                    label=f"⬇️ {fname}",
+                    data=f.read(),
+                    file_name=fname,
+                    mime="application/pdf",
+                    key=f"sample_download_{fname}"
+                )
+
+uploaded_file = st.file_uploader("PDF (Tender) Upload", type=["pdf"])
+st.caption("💡 You can drag and drop a PDF directly onto the box above, or click to browse.")
 
 active_pdf_bytes = None
 active_filename = None
@@ -146,10 +154,6 @@ active_filename = None
 if uploaded_file is not None:
     active_pdf_bytes = uploaded_file.getvalue()
     active_filename = uploaded_file.name
-elif sample_selected_path:
-    with open(sample_selected_path, "rb") as f:
-        active_pdf_bytes = f.read()
-    active_filename = os.path.basename(sample_selected_path)
 
 if active_pdf_bytes is not None:
     file_key = active_filename
@@ -288,4 +292,4 @@ if active_pdf_bytes is not None:
                         )
 
 else:
-    st.info("Upload a PDF or choose a sample to get started.")
+    st.info("Upload a PDF to get started.")
